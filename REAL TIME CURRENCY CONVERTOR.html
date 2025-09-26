@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Currency Converter with Historical Rates</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e9ecef;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+            width: 90%;
+            max-width: 450px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        h1 {
+            color: #343a40;
+            margin-bottom: 30px;
+        }
+        .input-area {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            gap: 10px;
+            flex-wrap: wrap; /* Allows items to wrap on smaller screens */
+        }
+        .input-group {
+            flex: 1;
+            text-align: left;
+            min-width: 150px; /* Ensures groups don't get too small */
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 16px;
+            background-color: #f8f9fa;
+        }
+        .swap-icon {
+            font-size: 28px;
+            color: #007bff;
+            cursor: pointer;
+            transition: transform 0.3s;
+            margin-top: 25px;
+        }
+        .swap-icon:hover {
+            transform: rotate(180deg);
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #212529;
+            background-color: #e9f5ff;
+            border-radius: 8px;
+        }
+        .loading {
+            color: #007bff;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Real-time Currency Converter</h1>
+
+        <div class="input-area">
+            <div class="input-group">
+                <label for="amount">Amount</label>
+                <input type="number" id="amount" value="1.00" min="0.01" step="0.01">
+            </div>
+
+            <div class="input-group">
+                <label for="date-picker">Date</label>
+                <input type="date" id="date-picker">
+            </div>
+            
+            <div class="input-group">
+                <label for="from-currency">From</label>
+                <select id="from-currency">
+                    </select>
+            </div>
+            
+            <div class="swap-icon" onclick="swapCurrencies()">
+                &#x21C6;
+            </div>
+
+            <div class="input-group">
+                <label for="to-currency">To</label>
+                <select id="to-currency">
+                    </select>
+            </div>
+        </div>
+        
+        <div id="result" class="result">
+            Select a date and currencies to see the conversion.
+        </div>
+    </div>
+
+    <script>
+        const apiUrl = 'https://api.frankfurter.app';
+        const datePicker = document.getElementById('date-picker');
+        const fromCurrencySelect = document.getElementById('from-currency');
+        const toCurrencySelect = document.getElementById('to-currency');
+        const amountInput = document.getElementById('amount');
+        const resultElement = document.getElementById('result');
+
+        const currencyToCountry = {
+            'AUD': 'Australia', 'BGN': 'Bulgaria', 'BRL': 'Brazil', 'CAD': 'Canada',
+            'CHF': 'Switzerland', 'CNY': 'China', 'CZK': 'Czech Republic', 'DKK': 'Denmark',
+            'EUR': 'European Union', 'GBP': 'United Kingdom', 'HKD': 'Hong Kong',
+            'HUF': 'Hungary', 'IDR': 'Indonesia', 'ILS': 'Israel', 'INR': 'India',
+            'ISK': 'Iceland', 'JPY': 'Japan', 'KRW': 'South Korea', 'MXN': 'Mexico',
+            'MYR': 'Malaysia', 'NOK': 'Norway', 'NZD': 'New Zealand', 'PHP': 'Philippines',
+            'PLN': 'Poland', 'RON': 'Romania', 'SEK': 'Sweden', 'SGD': 'Singapore',
+            'THB': 'Thailand', 'TRY': 'Turkey', 'USD': 'United States', 'ZAR': 'South Africa'
+        };
+
+        // Helper function to get today's date in YYYY-MM-DD format
+        function getTodayDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        // Fetch the list of currencies and populate the dropdowns
+        async function fetchCurrencies() {
+            try {
+                const response = await fetch(`${apiUrl}/currencies`);
+                const data = await response.json();
+                
+                // Populate both dropdowns with all available currencies
+                for (const currencyCode in data) {
+                    const currencyName = data[currencyCode];
+                    const countryName = currencyToCountry[currencyCode] || 'Unknown Country';
+                    const optionText = `${currencyCode} - ${countryName} (${currencyName})`;
+
+                    const optionFrom = new Option(optionText, currencyCode);
+                    const optionTo = new Option(optionText, currencyCode);
+                    fromCurrencySelect.add(optionFrom);
+                    toCurrencySelect.add(optionTo);
+                }
+
+                // Set initial default currencies and date
+                fromCurrencySelect.value = 'USD';
+                toCurrencySelect.value = 'INR';
+                datePicker.value = getTodayDate();
+
+                convertCurrency();
+
+            } catch (error) {
+                console.error("Error fetching currency list:", error);
+                resultElement.textContent = "Error: Could not load currency list.";
+                resultElement.classList.add('error');
+            }
+        }
+
+        // Fetch rates for a specific date and perform conversion
+        async function convertCurrency() {
+            const amount = parseFloat(amountInput.value);
+            const fromCurrency = fromCurrencySelect.value;
+            const toCurrency = toCurrencySelect.value;
+            const date = datePicker.value;
+
+            if (isNaN(amount) || amount <= 0) {
+                resultElement.textContent = "Please enter a valid amount.";
+                resultElement.classList.add('error');
+                return;
+            }
+            
+            resultElement.textContent = "Loading...";
+            resultElement.classList.add('loading');
+            resultElement.classList.remove('error');
+
+            try {
+                // Construct the API URL to fetch rates for the selected date
+                const response = await fetch(`${apiUrl}/${date}?amount=${amount}&from=${fromCurrency}&to=${toCurrency}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                const convertedAmount = data.rates[toCurrency];
+
+                resultElement.textContent = `${amount.toFixed(2)} ${fromCurrency} on ${data.date} = ${convertedAmount.toFixed(2)} ${toCurrency}`;
+                resultElement.classList.remove('loading', 'error');
+
+            } catch (error) {
+                console.error("Error converting currency:", error);
+                resultElement.textContent = "Error: Failed to fetch exchange rates for the selected date.";
+                resultElement.classList.add('error');
+                resultElement.classList.remove('loading');
+            }
+        }
+
+        // Function to swap the currencies
+        function swapCurrencies() {
+            const fromValue = fromCurrencySelect.value;
+            const toValue = toCurrencySelect.value;
+
+            fromCurrencySelect.value = toValue;
+            toCurrencySelect.value = fromValue;
+
+            convertCurrency();
+        }
+
+        // Add event listeners for the new date picker
+        document.addEventListener('DOMContentLoaded', fetchCurrencies);
+        amountInput.addEventListener('input', convertCurrency);
+        fromCurrencySelect.addEventListener('change', convertCurrency);
+        toCurrencySelect.addEventListener('change', convertCurrency);
+        datePicker.addEventListener('change', convertCurrency);
+    </script>
+
+</body>
+</html>
